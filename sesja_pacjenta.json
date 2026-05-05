@@ -1,0 +1,42 @@
+[
+    {
+        "role": "user",
+        "content": "dzień dobry, jakich danych potrzebujesz?"
+    },
+    {
+        "role": "assistant",
+        "content": "Dzień dobry! Aby móc obliczyć ryzyko kliniczne, potrzebuję kilku informacji o pacjencie. Czy mógłby Pan/Pani podać:\n\n*   Wiek pacjenta?\n*   Poziom kreatyniny?\n*   Liczbę zajętych narządów?"
+    },
+    {
+        "role": "user",
+        "content": "pacjent ma 28 lat, poziom kreatyniny wynosi 4.8 i po badaniach wywnioskowałem że pacjent ma zajęte dwa narządy"
+    },
+    {
+        "role": "assistant",
+        "content": "Dziękuję za te informacje.\n\nCzy pacjent przebywał na OIT (Oddziale Intensywnej Terapii) z powodu zaostrzenia choroby?\nCzy pacjent był leczony plazmaferezą?\nJakie było opóźnienie w rozpoznaniu choroby (w dniach)?"
+    },
+    {
+        "role": "user",
+        "content": "nie był, był leczony i nie było opóźnienia"
+    },
+    {
+        "role": "assistant",
+        "content": "Dziękuję. Rozumiem, że pacjent nie przebywał na OIT, był leczony plazmaferezą i nie było opóźnienia w rozpoznaniu.\n\nAby kontynuować, proszę o informację:\n*   Czy rozpoznanie było pierwotne czy wtórne?\n*   Jaki był przebieg choroby (np. ostry, przewlekły, nawracający)?\n*   Czy wystąpiły manifestacje pokarmowe, zajęcie ośrodkowego układu nerwowego (CSN) lub manifestacje moczowo-płciowe?"
+    },
+    {
+        "role": "user",
+        "content": "nie bardzo rozumiem pierwszego pytania... mógłbyś mi je wytłumaczyć?"
+    },
+    {
+        "role": "assistant",
+        "content": "Jasne, już tłumaczę.\n\nPytanie o rozpoznanie pierwotne lub wtórne dotyczy tego, czy choroba, którą zdiagnozowano, jest główną, samodzielną jednostką chorobową (pierwotne), czy też jest konsekwencją lub powikłaniem innej, wcześniej istniejącej choroby (wtórne).\n\nNa przykład, jeśli pacjent ma chorobę nerek, która jest głównym problemem, to jest to rozpoznanie pierwotne. Jeśli natomiast choroba nerek rozwinęła się jako powikłanie cukrzycy, to jest to rozpoznanie wtórne do cukrzycy.\n\nCzy teraz jest to jaśniejsze?"
+    },
+    {
+        "role": "user",
+        "content": "tak, już rozumiem. rozpoznanie było wtórne, przebieg był nawracający i nie wystąpiły żadne manifestacje czy inne"
+    },
+    {
+        "role": "assistant",
+        "content": "Dziękuję za wyjaśnienie. Zatem rozpoznanie było wtórne, przebieg nawracający, i nie było manifestacji pokarmowych, zajęcia CSN ani moczowo-płciowych.\n\nTeraz potrzebuję informacji o innych możliwych manifestacjach:\n*   Czy wystąpiły manifestacje wzrokowe, skórne lub neurologiczne?\n*   Czy były manifestacje sercowo-naczyniowe, mięśniowo-szkieletowe lub nerkowe?"
+    }
+]

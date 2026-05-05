@@ -1,0 +1,10 @@
+[theme]
+primaryColor = "#c0b94e"
+backgroundColor = "#4c5844"
+secondaryBackgroundColor = "#39403a"
+textColor = "#ffffff"
+redColor = "#c0b94e"
+orangeColor = "#bf722b"
+font = "monospace"
+baseRadius = "none"
+buttonRadius = "none"
