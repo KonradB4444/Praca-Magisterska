@@ -1,0 +1,7 @@
+streamlit
+xgboost
+pandas
+supabase
+langchain
+langchain-google-genai
+streamlit-cookies-controller
