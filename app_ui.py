@@ -33,8 +33,12 @@ cookie_manager = CookieController()
 # Logika odtwarzania sesji po odświeżeniu strony
 if st.session_state.zalogowany_user is None:
     # Próbujemy odczytać ciastka
-    zapisany_token = cookie_manager.get("asystent_token")
-    zapisany_refresh = cookie_manager.get("asystent_refresh")
+    try:
+        zapisany_token = cookie_manager.get("asystent_token")
+        zapisany_refresh = cookie_manager.get("asystent_refresh")
+    except TypeError:
+        zapisany_token = None
+        zapisany_refresh = None
     
     if zapisany_token and zapisany_refresh:
         try:
