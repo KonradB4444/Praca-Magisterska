@@ -5,3 +5,4 @@ supabase
 langchain
 langchain-google-genai
 streamlit-cookies-controller
+scikit-learn
