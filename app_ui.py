@@ -77,12 +77,15 @@ def ekran_logowania():
                     response = supabase.auth.sign_in_with_password({"email": login_email, "password": login_haslo})
                     st.session_state.zalogowany_user = response.user
                     
-                    cookie_manager.set("asystent_token", response.session.access_token, secure=True, same_site="strict")
-                    cookie_manager.set("asystent_refresh", response.session.refresh_token, secure=True, same_site="strict")
-                    
                     profil = supabase.table("profiles").select("*").eq("id", response.user.id).execute()
                     if profil.data:
                         st.session_state.profil_lekarza = profil.data[0]["username"]
+                    
+                    try:
+                        cookie_manager.set("asystent_token", response.session.access_token, secure=True, same_site="strict")
+                        cookie_manager.set("asystent_refresh", response.session.refresh_token, secure=True, same_site="strict")
+                    except Exception as e:
+                        logging.warning("Nie udało się zapisać ciasteczek sesji: %s", e)
                     
                     st.rerun()
                 except Exception as e:
