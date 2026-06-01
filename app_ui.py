@@ -10,8 +10,18 @@ from streamlit_cookies_controller import CookieController
 
 st.set_page_config(page_title="Asystent Medyczny", layout="wide")
 
+# Główny moduł interfejsu użytkownika aplikacji. Odpowiada za renderowanie widoków w Streamlit, zarządzanie stanem sesji,
+# autoryzację użytkowników przez Supabase oraz komunikację z backendem LLM.
+
+
 @st.cache_resource
 def init_supabase() -> Client:
+    """
+    Inicjalizuje i zwraca klienta Supabase.
+    Wykorzystuje @st.cache_resource by zapobiec ponownemu nawiązywaniu połączenia przy każdym odświeżaniu strony.
+    Zwraca klienta z bazy danych Supabase.
+    """
+
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
@@ -23,7 +33,10 @@ if "zalogowany_user" not in st.session_state:
 if "profil_lekarza" not in st.session_state:
     st.session_state.profil_lekarza = None
 if "historia_czatu" not in st.session_state:
-    st.session_state.historia_czatu = []
+    st.session_state.historia_czatu = [{
+        "role": "assistant",
+        "content": "Dzień dobry! Rozpocznijmy nową analizę pacjenta. Może zaczniemy od podania wieku, poziomu kreatyniny lub liczby zajętych narządów?"
+    }]
 if "aktywny_czat_id" not in st.session_state:
     st.session_state.aktywny_czat_id = None
 if "lista_czatow" not in st.session_state:
@@ -60,6 +73,10 @@ if st.session_state.zalogowany_user is None:
                 pass
 
 def ekran_logowania():
+    """
+    Renderuje interfejs logowania i rejestracji użytkownika.
+    Zarządza autoryzacją po stronie Supabase i aktualizuje globalny stan sesji po pomyślnym zalogowaniu.
+    """
     st.markdown("<br><br><br>", unsafe_allow_html=True) # Robimy odstęp z góry
     st.markdown("<h1 style='text-align: center;'>System Wspomagania Decyzji Klinicznych</h1>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -74,13 +91,17 @@ def ekran_logowania():
             login_haslo = st.text_input("Hasło", type="password")
             if st.button("Zaloguj się", use_container_width=True, type="primary"):
                 try:
+                    # Logowanie przez API supabase
                     response = supabase.auth.sign_in_with_password({"email": login_email, "password": login_haslo})
                     st.session_state.zalogowany_user = response.user
                     
+                    # Pobieranie danych profilowych
                     profil = supabase.table("profiles").select("*").eq("id", response.user.id).execute()
                     if profil.data:
                         st.session_state.profil_lekarza = profil.data[0]["username"]
                     
+
+                    # Ciasteczka są zapisywane w oddzielnym bloku try catch
                     try:
                         cookie_manager.set("asystent_token", response.session.access_token, secure=True, same_site="strict")
                         cookie_manager.set("asystent_refresh", response.session.refresh_token, secure=True, same_site="strict")
@@ -149,6 +170,10 @@ def potwiedz_usuniecie(czat_id):
 
 @st.dialog("Zarządzanie kontem")
 def zarzadzanie_kontem():
+    """
+    Renderuje okno dialogowe pozwalające na zmianę danych użytkownika (nazwa, hasło) jak i stałe usunięcie konta.
+    Wszystkie operacje na bazie są uwierzytelnione na podstawie tokenu obecnej sesji.
+    """
     st.write(f"Konto powiązane z e-mailem: **{st.session_state.zalogowany_user.email}**")
     st.divider()
     
@@ -250,6 +275,11 @@ def wyczysc_wyszukiwarke():
 
 # Główny widok apki
 def ekran_glowny():
+    """
+    Główna pętla renderująca interfejs zalogowanego użytkownika.
+    Zarządza paskiem bocznym (historią czatów i ich usuwaniu) oraz głównym oknem rozmowy.
+    Integruje frontend z silnikiem asystenta opartym na LangChain.
+    """
     if "agent_backend" not in st.session_state:
         klucz_gemini = st.secrets["GOOGLE_API_KEY"] 
         st.session_state.agent_backend = Asystent(klucz_gemini)
@@ -287,7 +317,10 @@ def ekran_glowny():
         
         if st.button("Nowy Czat", use_container_width=True, type="primary"):
             st.session_state.aktywny_czat_id = None
-            st.session_state.historia_czatu = []
+            st.session_state.historia_czatu = [{
+                "role": "assistant",
+                "content": "Dzień dobry! Rozpocznijmy nową analizę pacjenta. Może zaczniemy od podania wieku, poziomu kreatyniny lub liczby zajętych narządów?"
+            }]
             if "agent_backend" in st.session_state:
                 del st.session_state.agent_backend
             st.rerun()
@@ -317,7 +350,7 @@ def ekran_glowny():
         else:
             lista_do_wyswietlenia = st.session_state.lista_czatow
             
-        # Renderowanie wyników
+        # Filtrowanie i renderowanie wyników
         if not lista_do_wyswietlenia:
             if fraza:
                 fraza_safe = html.escape(fraza)
@@ -379,6 +412,8 @@ def ekran_glowny():
                     nowy_msg_asystenta = {"role": "assistant", "content": odpowiedz}
                     
                     # Łapanie wyników XGBoosta
+                    # Tytuł czatu jest generowany tylko wtedy, gdy jego aktualna wartość to None lub "Nowa konsultacja"
+                    # Zapobiega niepotrzebnym zapytaniom LLMa
                     if "tymczasowe_wyniki_ui" in st.session_state and st.session_state.tymczasowe_wyniki_ui is not None:
                         nowy_msg_asystenta["karta_wynikow"] = st.session_state.tymczasowe_wyniki_ui
                         
@@ -412,11 +447,19 @@ def ekran_glowny():
 
 
 def wygeneruj_tytul_czatu(wiadomosc):
+    """
+    Generuje krótki tytuł konsultacji na podstawie podanego kontekstu. Tytuł generowany jest automatycznie.
+    Argumenty: 
+        wiadomosc (str) - ostatnia wiadomość lekarza w konwersacji.
+    Zwraca wygenerowany tytuł czatu (max. 4 słowa) lub "BRAK_DANYCH".
+    """
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
         klucz = st.secrets["GOOGLE_API_KEY"]
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=klucz, thinking_budget=0)
 
+        # Zabezpiecznia przed atakami prompt injection czy XSS
+        # Proste rzeczy takie jak usuwanie znaków specjalnych czy obcinanie wiadomości do 500 znaków żeby zredukować zużycie tokenów
         wiadomosc_bezpieczna = re.sub(r"[^\w\s\.,\-:;?!()'\"@%/]", "", wiadomosc[:500])
         
         system_prompt = (
