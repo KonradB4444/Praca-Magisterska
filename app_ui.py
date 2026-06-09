@@ -158,7 +158,10 @@ def potwiedz_usuniecie(czat_id):
             
             if st.session_state.aktywny_czat_id == czat_id:
                 st.session_state.aktywny_czat_id = None
-                st.session_state.historia_czatu = []
+                st.session_state.historia_czatu = [{
+                    "role": "assistant",
+                    "content": "Dzień dobry! Rozpocznijmy nową analizę pacjenta. Może zaczniemy od podania wieku, poziomu kreatyniny lub liczby zajętych narządów?"
+                }]
                 if "agent_backend" in st.session_state:
                     del st.session_state.agent_backend
             
@@ -270,6 +273,45 @@ def renderuj_karte(wyniki):
         
     st.divider()
 
+def renderuj_grid_parametrow(historia):
+    """Renderuje grid 6x3 pokazujący postęp konsultacji oraz zebrane wartości na podstawie ukrytych tagów."""
+    wszystkie_parametry = [
+        "Wiek", "Kreatynina", "Liczba narządów", "Opóźnienie rozpoznania",
+        "Rozpoznanie", "Przebieg scalony", "Pobyt na OIT", "Plazmaferezy",
+        "Leczenie plazmaferezą", "Zajęcie nerek", "Manif. pokarmowa", "Manif. CSN",
+        "Manif. moczowo-płciowa", "Manif. wzrokowa", "Manif. skórna",
+        "Manif. neurologiczna", "Manif. sercowo-naczyniowa", "Manif. mięśniowo-szkieletowa"
+    ]
+    zebrane = {}
+    for msg in reversed(historia):
+        if msg["role"] == "assistant":
+            match = re.search(r'\[ZEBRANE:(.*?)\]', msg["content"])
+            if match:
+                zawartosc = match.group(1).strip()
+                if zawartosc:
+                    elementy = zawartosc.split(',')
+                    for el in elementy:
+                        if ':' in el:
+                            klucz, wartosc = el.split(':', 1)
+                            zebrane[klucz.strip()] = wartosc.strip()
+                break
+    
+    # Generowanie kodu HTML z siatką (Grid 6 kolumn)
+    html_grid = '<div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 20px;">'
+    for param in wszystkie_parametry:
+        if param in zebrane:
+            kolor = "#4CAF50" # Zielony (zebrane)
+            tooltip = f"{param}: {zebrane[param]}"
+        else:
+            kolor = "#4a4a4a" # Szary (brak)
+            tooltip = f"{param} (Brak danych)"
+            
+        html_grid += f'<div title="{tooltip}" style="height: 18px; background-color: {kolor}; border-radius: 4px; cursor: help; transition: 0.3s;"></div>'
+    html_grid += '</div>'
+    
+    st.markdown("<span style='font-size: 14px; color: gray;'>Postęp konsultacji:</span>", unsafe_allow_html=True)
+    st.markdown(html_grid, unsafe_allow_html=True)
+
 def wyczysc_wyszukiwarke():
     st.session_state.wyszukiwarka = ""
 
@@ -324,6 +366,10 @@ def ekran_glowny():
             if "agent_backend" in st.session_state:
                 del st.session_state.agent_backend
             st.rerun()
+
+        if st.session_state.aktywny_czat_id is not None:
+            renderuj_grid_parametrow(st.session_state.historia_czatu)
+            st.divider()
             
         st.subheader("Twoje Konsultacje")
 
@@ -383,7 +429,9 @@ def ekran_glowny():
     # Renderowanie wiadomości
     for msg in st.session_state.historia_czatu:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            # Ukrywamy tag przed okiem lekarza
+            czysty_tekst = re.sub(r'\[ZEBRANE:.*?\]', '', msg["content"]).strip()
+            st.markdown(czysty_tekst)
             if "karta_wynikow" in msg:
                 renderuj_karte(msg["karta_wynikow"]) 
                 pass 
@@ -458,9 +506,12 @@ def wygeneruj_tytul_czatu(wiadomosc):
         klucz = st.secrets["GOOGLE_API_KEY"]
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=klucz, thinking_budget=0)
 
+        # Zabezpieczenie przed prompt injection specyficznym do tego LLMa, związane z system promptem
+        wiadomosc_czysta = re.sub(r'\[ZEBRANE:.*?\]', '', wiadomosc, flags=re.IGNORECASE).strip()
+
         # Zabezpiecznia przed atakami prompt injection czy XSS
         # Proste rzeczy takie jak usuwanie znaków specjalnych czy obcinanie wiadomości do 500 znaków żeby zredukować zużycie tokenów
-        wiadomosc_bezpieczna = re.sub(r"[^\w\s\.,\-:;?!()'\"@%/]", "", wiadomosc[:500])
+        wiadomosc_bezpieczna = re.sub(r"[^\w\s\.,\-:;?!()'\"@%/]", "", wiadomosc_czysta[:500])
         
         system_prompt = (
             "Przeanalizuj poniższą wiadomość od lekarza."
