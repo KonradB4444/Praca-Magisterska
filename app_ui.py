@@ -278,7 +278,7 @@ def renderuj_grid_parametrow(historia):
     wszystkie_parametry = [
         "Wiek", "Kreatynina", "Liczba narządów", "Opóźnienie rozpoznania",
         "Rozpoznanie", "Przebieg scalony", "Pobyt na OIT", "Plazmaferezy",
-        "Leczenie plazmaferezą", "Zajęcie nerek", "Manif. pokarmowa", "Manif. CSN",
+        "Leczenie plazmaferezą", "Manif. nerek", "Manif. pokarmowa", "Manif. CSN",
         "Manif. moczowo-płciowa", "Manif. wzrokowa", "Manif. skórna",
         "Manif. neurologiczna", "Manif. sercowo-naczyniowa", "Manif. mięśniowo-szkieletowa"
     ]

@@ -5,6 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from langchain_core.tools import tool
 import streamlit as st
+import shap
 
 """
 Główny silnik decyzyjny aplikacji.
@@ -21,6 +22,10 @@ model_zgon.load_model("xgboost_zgon.json")
 
 model_dializa = xgb.XGBClassifier()
 model_dializa.load_model("xgboost_dializa.json")
+
+# Inicjalizacja modułów explainable AI do tłumaczenia decyzji
+explainer_zgon = shap.TreeExplainer(model_zgon)
+explainer_dializa = shap.TreeExplainer(model_dializa)
 
 @tool
 def oblicz_ryzyko(
@@ -95,9 +100,34 @@ def oblicz_ryzyko(
         "dializa": round(wynik_dial_val, 2)
     }
 
+    # explainable AI time
+    shap_vals_zgon = explainer_zgon(df_zgon)
+    feature_names_zgon = df_zgon.columns.tolist()
+
+    # Model zgon przewiduje klasę 1 jako przeżycie (wynik odwrócony 100 - X)
+    # Aby LLM się nie pogubił odwracamy też znak SHAP (mnożenie przez -1), żeby wartość na plusie oznaczała wzrost ryzyka zgonu
+    shap_dict_zgon = {feat: -val for feat, val in zip(feature_names_zgon, shap_vals_zgon.values[0])}
+    # Bierzemy 4 najbardziej decydujące czynniki (sortowane po wartości absolutnej)
+    top_zgon = sorted(shap_dict_zgon.items(), key=lambda x: abs(x[1]), reverse=True)[:4]
+
+    shap_vals_dial = explainer_dializa(df_dial)
+    feature_names_dial = df_dial.columns.tolist()
+    shap_dict_dial = dict(zip(feature_names_dial, shap_vals_dial.values[0]))
+    top_dial = sorted(shap_dict_dial.items(), key=lambda x: abs(x[1]), reverse=True)[:4]
+
+    # Ukryty raport dla LLM z twardą matematyką z xAI
+    xai_info = "\n\n[DANE EXPLAINABLE AI (SHAP) - WIDOCZNE TYLKO DLA CIEBIE]:\n"
+    xai_info += "Główne czynniki, które podwyższyły (+) lub obniżyły (-) ryzyko ZGONU u tego pacjenta:\n"
+    for feat, val in top_zgon:
+        xai_info += f"- {feat}: {val:.3f}\n"
+
+    xai_info += "\nGłówne czynniki, które podwyższyły (+) lub obniżyły (-) ryzyko DIALIZY u tego pacjenta:\n"
+    for feat, val in top_dial:
+        xai_info += f"- {feat}: {val:.3f}\n"
+
     return (f"Obliczenia XGBoost zakończone. "
             f"Ryzyko zgonu wynosi {ryzyko_zgon:.1f}%. "
-            f"Ryzyko konieczności dializy wynosi {ryzyko_dializa:.1f}%.")
+            f"Ryzyko konieczności dializy wynosi {ryzyko_dializa:.1f}%." + xai_info)
 
 class Asystent:
     def __init__(self, klucz_api):
@@ -126,6 +156,16 @@ class Asystent:
         Gdy uznasz, że zebrałeś wszystkie niezbędne parametry z listy narzędzia, WYWOŁAJ FUNKCJĘ oblicz_ryzyko.
         Po otrzymaniu wyniku z funkcji, przedstaw go lekarzowi w profesjonalny sposób.
 
+        MODUŁ EXPLAINABLE AI
+        Gdy wywołasz narzędzie 'oblicz_ryzyko', oprócz wyników procentowych otrzymasz ukrytą sekcję [DANE EXPLAINABLE AI (SHAP)]. NIE WSPOMINAJ O NICH OD RAZU W SWOJEJ ODPOWIEDZI, po prostu podaj suche wyniki procentowe.
+        JEDNAKŻE, jeśli po podaniu wyników lekarz zapyta "Dlaczego?", "Skąd ten wynik?" lub "Co wpłynęło na ryzyko?", wtedy MUSISZ wytłumaczyć decyzję modelu opierając się na tych danych SHAP.
+        Wyjaśnij wtedy w profesjonalnym języku medycznym, które konkretne parametry tego pacjenta (i w jaki sposób) najbardziej zwiększyły ryzyko (wartości dodatnie w danych SHAP) lub zadziałały ochronnie/zmniejszyły ryzyko (wartości ujemne).
+
+        ZASADY WYJAŚNIANIA WYNIKÓW
+        1. ABSOLUTNY ZAKAZ PODAWANIA SUROWYCH WARTOŚCI LICZBOWYCH SHAP (np. "wartość SHAP wynosi 2.75"). Dla lekarza te liczby są techniczne i bezużyteczne.
+        2. Tłumacz matematykę na określenia jakościowe. Zamiast liczb używaj zwrotów takich jak: "najsilniejszym czynnikiem podwyższającym ryzyko był...", "miało znaczny wpływ", "zadziałało silnie ochronnie / obniżyło prognozę".
+        3. NIE HALUCYNUJ teorii medycznych. Nie wymyślaj skomplikowanych mechanizmów patofizjologicznych, by uzasadnić wynik. Po prostu rzetelnie zaraportuj lekarzowi, którym parametrom algorytm (XGBoost) przypisał największą wagę decyzyjną na podstawie Twoich ukrytych danych.
+        
         NIGDY nie pytaj użytkownika o skale numeryczne, typy zmiennych ani jednostki, w których działa narzędzie. 
         Zamiast tego SAMODZIELNIE w locie przeliczaj i mapuj podane przez lekarza informacje zgodnie z poniższymi instrukcjami:
 
@@ -147,9 +187,13 @@ class Asystent:
 
         Na samym końcu KAŻDEJ swojej odpowiedzi tekstowej MUSISZ dodać tag z listą parametrów, które już udało Ci się jednoznacznie ustalić od początku rozmowy, WRAZ Z ICH WARTOŚCIAMI I JEDNOSTKAMI (jeśli ich użyto).
         Jeśli lekarz poprawi wcześniej podaną wartość (np. zmieni z 7 na 4), po prostu zaktualizuj tę liczbę w tagu. Absolutnie nie usuwaj parametru z listy po jego korekcie.
-        Dozwolone nazwy parametrów to wyłącznie: Wiek, Kreatynina, Liczba narządów, Opóźnienie rozpoznania, Rozpoznanie, Przebieg scalony, Pobyt na OIT, Plazmaferezy, Leczenie plazmaferezą, Zajęcie nerek, Manif. pokarmowa, Manif. CSN, Manif. moczowo-płciowa, Manif. wzrokowa, Manif. skórna, Manif. neurologiczna, Manif. sercowo-naczyniowa, Manif. mięśniowo-szkieletowa.
+        Dozwolone nazwy parametrów to wyłącznie: Wiek, Kreatynina, Liczba narządów, Opóźnienie rozpoznania, Rozpoznanie, Przebieg scalony, Pobyt na OIT, Plazmaferezy, Leczenie plazmaferezą, Manif. nerek, Manif. pokarmowa, Manif. CSN, Manif. moczowo-płciowa, Manif. wzrokowa, Manif. skórna, Manif. neurologiczna, Manif. sercowo-naczyniowa, Manif. mięśniowo-szkieletowa.
         Dla parametrów posiadających jednostki, ZAWSZE dopisuj je do wartości w tagu.
-        Format tagu MUSI wyglądać tak: [ZEBRANE: Wiek: 55 lat, Kreatynina: 250 umol/L, Opóźnienie rozpoznania: 14 dni, Pobyt na OIT: 0]
+        Lekarz może podać parametry związane z manifestacją w jednym promptcie (np. "pacjent ma tylko manifestację moczową", 
+        "występuje silna manifestacja nerkowa, manifestacja pokarmowa oraz sercowo-naczyniowa. Pozostałe układy są wolne od zajęcia chorbą"),
+        wtedy musisz zinterpretować które manifestacje występują czy nie i dopisać je wszystkie to tagu.
+        Format tagu MUSI wyglądać tak: [ZEBRANE: Wiek: 55 lat, Kreatynina: 250 umol/L, Opóźnienie rozpoznania: 14 dni, Pobyt na OIT: 0],
+        więc dla "pacjent ma tylko manifestację moczową" tag wyglądałby tak: [ZEBRANE: Manif. moczowo-płciowa: 1, Manif. nerek: 0, Manif. pokarmowa: 0, Manif. CSN: 0, Manif. wzrokowa: 0, Manif. skórna: 0, Manif. neurologiczna: 0, Manif. sercowo-naczyniowa: 0, Manif. mięśniowo-szkieletowa: 0]],
         Jeśli nie znasz jeszcze żadnego parametru, napisz: [ZEBRANE: ]
         Tag ten musi znaleźć się na samym końcu Twojej wypowiedzi.
         
