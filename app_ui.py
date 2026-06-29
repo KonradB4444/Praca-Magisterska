@@ -8,7 +8,7 @@ from asystent_silnik import Asystent
 from supabase import create_client, Client
 from streamlit_cookies_controller import CookieController
 
-st.set_page_config(page_title="Asystent Medyczny", layout="wide")
+st.set_page_config(page_title="Asystent Zapalenia", layout="wide")
 
 # Główny moduł interfejsu użytkownika aplikacji. Odpowiada za renderowanie widoków w Streamlit, zarządzanie stanem sesji,
 # autoryzację użytkowników przez Supabase oraz komunikację z backendem LLM.
